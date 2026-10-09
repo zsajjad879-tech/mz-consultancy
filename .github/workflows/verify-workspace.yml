@@ -1,0 +1,40 @@
+name: Verify account workspace
+on:
+  push:
+    paths:
+      - MZ-Account-Workspace-Source.zip
+      - .github/workflows/verify-workspace.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Extract reviewed source
+        run: python -m zipfile -e MZ-Account-Workspace-Source.zip workspace-source
+      - name: Install pinned database driver without install scripts
+        working-directory: workspace-source/mz-app
+        run: npm install --ignore-scripts
+      - name: Check source syntax
+        working-directory: workspace-source/mz-app
+        run: npm run check
+      - name: Verify account, finance and storage rules
+        working-directory: workspace-source/mz-app
+        run: npm test
+      - name: Verify installed PostgreSQL driver
+        working-directory: workspace-source/mz-app
+        run: node --input-type=module -e "const pg=await import('pg'); if(typeof pg.default.Pool!=='function') throw Error('Pool unavailable'); console.log('PostgreSQL driver imports successfully');"
+      - name: Audit production dependencies
+        working-directory: workspace-source/mz-app
+        run: npm audit --omit=dev
+      - uses: actions/upload-artifact@v4
+        with:
+          name: verified-dependency-lock
+          path: workspace-source/mz-app/package-lock.json
+          retention-days: 7
